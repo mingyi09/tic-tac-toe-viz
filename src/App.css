@@ -1,0 +1,96 @@
+/* Layout */
+#root {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.app h1 {
+  text-align: center;
+  margin-bottom: 1rem;
+}
+
+.top-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.status {
+  font-size: 1.1rem;
+}
+
+.status.winner {
+  color: #2ecc71;
+}
+
+.actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+/* Board */
+.board {
+  display: grid;
+  grid-template-columns: repeat(3, 100px);
+  grid-template-rows: repeat(3, 100px);
+  gap: 8px;
+  justify-content: center;
+  margin: 0 auto 2rem;
+}
+
+.square {
+  width: 100px;
+  height: 100px;
+  display: grid;
+  place-items: center;
+  font-size: 2.2rem;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #3a3a3a;
+}
+
+.square:disabled {
+  opacity: 0.6;
+}
+
+/* History */
+.history h2 {
+  margin-bottom: 0.75rem;
+}
+
+.history .empty {
+  color: #888;
+}
+
+.history table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.history th, .history td {
+  padding: 0.5rem 0.6rem;
+  border-bottom: 1px solid #333;
+  text-align: left;
+}
+
+.history thead th {
+  background: #111;
+}
+
+.vec-item {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+}
+
+/* Header white, body black on white */
+.history th {
+  color: #ffffff;
+}
+
+.history td {
+  color: #000000;
+  background: #ffffff;
+}
