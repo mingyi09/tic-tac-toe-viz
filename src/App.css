@@ -32,6 +32,66 @@
   gap: 0.5rem;
 }
 
+/* Setup */
+.setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  max-width: 640px;
+  margin: 1rem auto 2rem;
+  padding: 1rem 1.25rem;
+  background: #ffffff;
+  color: #000000;
+  border: 1px solid #333;
+  border-radius: 10px;
+}
+
+.setup h2 {
+  margin: 0 0 0.25rem;
+}
+
+.setup .field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.setup .field label {
+  font-weight: 600;
+}
+
+.setup .field input[type="text"],
+.setup .field select {
+  padding: 0.5rem 0.6rem;
+  border: 1px solid #333;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #000000;
+}
+
+.setup .field input[type="text"]:read-only {
+  background: #f8f8f8;
+}
+
+.setup .field input + button {
+  margin-top: 0.4rem;
+  width: fit-content;
+}
+
+.setup .actions {
+  margin-top: 0.5rem;
+  justify-content: flex-end;
+  gap: 0.75rem;
+}
+
+/* Meta */
+.meta {
+  display: flex;
+  justify-content: center;
+  gap: 1.25rem;
+  margin-bottom: 0.75rem;
+}
+
 /* Board */
 .board {
   display: grid;
