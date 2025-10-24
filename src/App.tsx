@@ -183,6 +183,7 @@ function App() {
     setUploadSubmitting(true)
     setUploadError(null)
     try {
+      if (!db) throw new Error('Firebase not configured')
       // Summary document under top-level /games/{gameId}
       const outcome: BackendOutcome = winner === 'X' ? '1' : winner === 'O' ? '-1' : '0'
       const startedMs = startedAt ? new Date(startedAt).getTime() : Date.now()

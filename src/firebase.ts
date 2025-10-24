@@ -1,16 +1,19 @@
 import { getApp, getApps, initializeApp } from 'firebase/app'
 import { getFirestore, serverTimestamp, Timestamp } from 'firebase/firestore'
 
-const firebaseConfig = {
-  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
-  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
-  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
-  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+const apiKey = import.meta.env.VITE_FIREBASE_API_KEY
+const authDomain = import.meta.env.VITE_FIREBASE_AUTH_DOMAIN
+const projectId = import.meta.env.VITE_FIREBASE_PROJECT_ID
+const appId = import.meta.env.VITE_FIREBASE_APP_ID
+
+let dbRef: ReturnType<typeof getFirestore> | null = null
+if (apiKey && authDomain && projectId && appId) {
+  const firebaseConfig = { apiKey, authDomain, projectId, appId }
+  const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
+  dbRef = getFirestore(app)
 }
 
-const app = getApps().length ? getApp() : initializeApp(firebaseConfig)
-
-export const db = getFirestore(app)
+export const db = dbRef
 export { serverTimestamp, Timestamp }
 
 
