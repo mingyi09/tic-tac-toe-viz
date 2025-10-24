@@ -27,9 +27,9 @@ interface MoveUploadRecord {
   move_index: number
   move: number
   S: number[]
-  S_json: string
+  S_str: string
   S_prime: number[]
-  S_prime_json: string
+  S_prime_str: string
   outcome: '1' | '-1' | '0' | 'unknown'
 }
 
@@ -55,6 +55,10 @@ function calculateWinner(board: BoardCell[]): Player | null {
 
 function getMoveVector(board: BoardCell[]): number[] {
   return board.map((cell) => (cell === 'X' ? 1 : cell === 'O' ? -1 : 0))
+}
+
+function vectorToBoardString(vec: number[]): string {
+  return vec.map((v) => (v === 1 ? 'X' : v === -1 ? 'O' : '.')).join('')
 }
 
 function downloadFile(filename: string, contents: string, mime: string) {
@@ -83,6 +87,8 @@ function App() {
   const [gameId, setGameId] = useState<string>(generateGameId())
   const [player1Exp, setPlayer1Exp] = useState<ExperienceLevel | ''>('')
   const [player2Exp, setPlayer2Exp] = useState<ExperienceLevel | ''>('')
+  const [player1Name, setPlayer1Name] = useState<string>('')
+  const [player2Name, setPlayer2Name] = useState<string>('')
   const [startedAt, setStartedAt] = useState<string | null>(null)
   const [endedAt, setEndedAt] = useState<string | null>(null)
   const [savedGameDoc, setSavedGameDoc] = useState<boolean>(false)
@@ -106,9 +112,9 @@ function App() {
         move_index: m.moveNumber,
         move: m.position,
         S,
-        S_json: JSON.stringify(S),
+        S_str: vectorToBoardString(S),
         S_prime: SPrime,
-        S_prime_json: JSON.stringify(SPrime),
+        S_prime_str: vectorToBoardString(SPrime),
         outcome: finalOutcome === 'unknown' ? 'unknown' : finalOutcome,
       }
     })
@@ -159,6 +165,8 @@ function App() {
     setSavedGameDoc(false)
     setPlayer1Exp('')
     setPlayer2Exp('')
+    setPlayer1Name('')
+    setPlayer2Name('')
     setGameId(generateGameId())
   }
 
@@ -194,6 +202,8 @@ function App() {
         outcome_num: outcomeNum,
         player1_level: mapLevel(player1Exp),
         player2_level: mapLevel(player2Exp),
+        player1_name: player1Name || null,
+        player2_name: player2Name || null,
         started_at_ms: startedMs,
         ended_at_ms: endedMs,
       }
@@ -262,6 +272,16 @@ function App() {
             <button onClick={() => setGameId(generateGameId())}>Regenerate</button>
           </div>
           <div className="field">
+            <label htmlFor="p1-name">Player X name</label>
+            <input
+              id="p1-name"
+              type="text"
+              placeholder="e.g., Alice"
+              value={player1Name}
+              onChange={(ev) => setPlayer1Name(ev.target.value)}
+            />
+          </div>
+          <div className="field">
             <label htmlFor="p1-exp">Player X experience</label>
             <select
               id="p1-exp"
@@ -273,6 +293,16 @@ function App() {
               <option value="intermediate">intermediate</option>
               <option value="expert">expert</option>
             </select>
+          </div>
+          <div className="field">
+            <label htmlFor="p2-name">Player O name</label>
+            <input
+              id="p2-name"
+              type="text"
+              placeholder="e.g., Bob"
+              value={player2Name}
+              onChange={(ev) => setPlayer2Name(ev.target.value)}
+            />
           </div>
           <div className="field">
             <label htmlFor="p2-exp">Player O experience</label>
@@ -298,7 +328,7 @@ function App() {
           <div className="meta">
             <div><strong>Game:</strong> {gameId}</div>
             <div><strong>Started:</strong> {startedAt}</div>
-            <div><strong>X:</strong> {player1Exp} <strong>O:</strong> {player2Exp}</div>
+            <div><strong>X:</strong> {player1Name || 'Player X'} ({player1Exp || 'n/a'}) <strong>O:</strong> {player2Name || 'Player O'} ({player2Exp || 'n/a'})</div>
           </div>
           <div className="top-bar">
             {!winner && !isDraw && (
@@ -345,6 +375,8 @@ function App() {
   outcome_str: winner ? (winner === 'X' ? '1' : '-1') : '0',
   player1_level: mapLevel(player1Exp),
   player2_level: mapLevel(player2Exp),
+  player1_name: player1Name || null,
+  player2_name: player2Name || null,
   started_at_ms: startedAt ? new Date(startedAt).getTime() : Date.now(),
   ended_at_ms: endedAt ? new Date(endedAt).getTime() : Date.now(),
 }, null, 2)}
