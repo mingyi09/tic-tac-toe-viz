@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import './App.css'
-import newGamesRaw from '../new_games.json?raw'
+import newGamesRaw from '../new_games.json?raw' // this is our games (human data)
+import ai1Raw from '../q_table.json?raw' // this is the AI-1 moves data (Q-learning)
 
 type Player = 'X' | 'O'
 type BoardCell = Player | null
 
+// if three cells in a row, column, or diagonal are the same -> winner
 const WIN_LINES: number[][] = [
   [0, 1, 2],
   [3, 4, 5],
@@ -16,6 +18,7 @@ const WIN_LINES: number[][] = [
   [2, 4, 6],
 ]
 
+// if winning line is found, return the winner
 function calculateWinner(board: BoardCell[]): Player | null {
   for (const [a, b, c] of WIN_LINES) {
     if (board[a] && board[a] === board[b] && board[a] === board[c]) {
@@ -25,16 +28,17 @@ function calculateWinner(board: BoardCell[]): Player | null {
   return null
 }
 
+// the main component that renders the visualization
 export default function Visualization() {
   const [board, setBoard] = useState<BoardCell[]>(Array(9).fill(null))
   const [nextPlayer, setNextPlayer] = useState<Player>('X')
   const winner = useMemo(() => calculateWinner(board), [board])
   const isDraw = useMemo(() => board.every((c) => c !== null) && !winner, [board, winner])
+  // states that store checkboxes for showing AI1, AI2, and human player strategies
   const [showAI1, setShowAI1] = useState<boolean>(false)
   const [showAI2, setShowAI2] = useState<boolean>(false)
   const [showHuman, setShowHuman] = useState<boolean>(true)
 
-  // Load games and moves; build state->move counts using only IDs present in new_games.json.games
   type GameSummary = {
     id: string
   }
@@ -58,6 +62,7 @@ export default function Visualization() {
     }
 
     // Valid IDs are those present in new_games.json's games array
+    // (some human games data is filtered out, because of testing/AI moves)
     const validIds = new Set<string>((parsedNew.games || []).map(g => g.id))
 
     const statePlayerToMoveCounts = new Map<string, Map<number, number>>()
@@ -74,10 +79,63 @@ export default function Visualization() {
     return { statePlayerToMoveCounts }
   }, [])
 
+  // this is a helper function that converts the board to a string
+  // X: 'X', O: 'O', empty cell: '.' -> a board string
   function boardToKey(b: BoardCell[]): string {
     return b.map((c) => (c === 'X' ? 'X' : c === 'O' ? 'O' : '.')).join('')
   }
 
+  // Parse AI-1 Q-table once and build lookup by `${S_str}|player`
+  type QState = { player: 1 | -1; probs: number[]; best?: number }
+  const ai1ByStateAndPlayer = useMemo(() => {
+    const map = new Map<string, QState>()
+    try {
+      const parsed = JSON.parse(ai1Raw) as { states: Record<string, QState> }
+      const entries = parsed?.states ? Object.entries(parsed.states) : []
+      for (const [s, v] of entries) {
+        if (!v || !Array.isArray(v.probs)) continue
+        const p = (v.player === 1 ? 1 : -1) as 1 | -1
+        map.set(`${s}|${p}`, { player: p, probs: v.probs, best: v.best })
+      }
+    } catch {
+      // ignore parse errors; leave empty
+      console.log('Error parsing the Q-table')
+    }
+    return map
+  }, [])
+
+  const ai1SuggestedMove = useMemo(() => {
+    if (!showAI1) return { move: null as number | null, hasData: false }
+    if (winner || isDraw) return { move: null as number | null, hasData: false }
+    const key = boardToKey(board)
+    const playerNum = nextPlayer === 'X' ? 1 : -1
+    const entry = ai1ByStateAndPlayer.get(`${key}|${playerNum}`)
+    if (!entry) return { move: null as number | null, hasData: false }
+
+    const legalIndices: number[] = []
+    for (let i = 0; i < 9; i++) {
+      if (!board[i]) {
+        legalIndices.push(i);
+      }
+    }
+    if (legalIndices.length === 0) return { move: null as number | null, hasData: true }
+    let candidate: number | null = null
+    if (typeof entry.best === 'number' && legalIndices.includes(entry.best)) {
+      candidate = entry.best
+    } else {
+      let bestIdx: number | null = null
+      let bestVal = -Infinity
+      for (const i of legalIndices) {
+        const v = entry.probs[i] ?? -Infinity
+        if (v > bestVal) {
+          bestVal = v
+          bestIdx = i
+        }
+      }
+      candidate = bestIdx
+    }
+    return { move: candidate, hasData: true }
+  }, [ai1ByStateAndPlayer, board, nextPlayer, winner, isDraw, showAI1])
   const suggestedMove = useMemo(() => {
     if (winner || isDraw) return null
     const key = boardToKey(board)
@@ -117,7 +175,7 @@ export default function Visualization() {
           <div className="status">Next player: <strong>{nextPlayer}</strong></div>
         )}
         {winner && <div className="status winner">Winner: <strong>{winner}</strong></div>}
-        {isDraw && <div className="status">It's a draw.</div>}
+        {isDraw && <div className="status">This is a draw.</div>}
         <div className="actions">
           <button onClick={reset}>Reset</button>
         </div>
@@ -125,7 +183,7 @@ export default function Visualization() {
 
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
         <div>
-          <h2 style={{ marginBottom: 8 }}>Left: Interactive</h2>
+          <h2 style={{ marginBottom: 8 }}>Interactive Board</h2>
           <div className="board" role="grid" aria-label="Interactive board">
             {board.map((cell, idx) => (
               <button
@@ -143,11 +201,20 @@ export default function Visualization() {
         </div>
 
         <div>
-          <h2 style={{ marginBottom: 8 }}>Right: Synced</h2>
+          <h2 style={{ marginBottom: 8 }}>Game Visualization</h2>
           <div className="board" role="grid" aria-label="Synced board">
             {board.map((cell, idx) => {
-              const isSuggestion = suggestedMove === idx && !cell && !winner && !isDraw && showHuman
-              const display = cell || (isSuggestion ? nextPlayer : null)
+              const isHumanSuggestion = suggestedMove === idx && !cell && !winner && !isDraw && showHuman
+              const isAI1Suggestion = ai1SuggestedMove.move === idx && !cell && !winner && !isDraw && showAI1
+              const display = cell || (isHumanSuggestion || isAI1Suggestion ? nextPlayer : null)
+              const style =
+                isHumanSuggestion && isAI1Suggestion
+                  ? { borderStyle: 'dashed', borderColor: '#e74c3c', boxShadow: 'inset 0 0 0 2px #3498db' }
+                  : isHumanSuggestion
+                  ? { borderStyle: 'dashed', borderColor: '#e74c3c' }
+                  : isAI1Suggestion
+                  ? { borderStyle: 'dashed', borderColor: '#3498db' }
+                  : undefined
               return (
                 <button
                   key={`R-${idx}`}
@@ -155,46 +222,55 @@ export default function Visualization() {
                   role="gridcell"
                   aria-label={`right-cell-${idx}`}
                   disabled
-                  style={isSuggestion ? { borderStyle: 'dashed', borderColor: '#e74c3c' } : undefined}
+                  style={style}
                 >
                   {display && (
-                    <span style={isSuggestion ? { opacity: 0.6, color: '#e74c3c' } : undefined}>
-                      {display}
-                    </span>
+                    isHumanSuggestion ? (
+                      <span style={{ opacity: 0.6, color: '#e74c3c' }}>{display}</span>
+                    ) : isAI1Suggestion ? (
+                      <span style={{ opacity: 0.6, color: '#3498db' }}>{display}</span>
+                    ) : (
+                      <span>{display}</span>
+                    )
                   )}
                 </button>
               )
             })}
           </div>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3498db' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3498db', fontSize: '1.2rem' }}>
               <input
                 type="checkbox"
                 checked={showAI1}
                 onChange={(e) => setShowAI1(e.target.checked)}
-                style={{ accentColor: '#3498db' }}
+                style={{ accentColor: '#3498db', transform: 'scale(1.25)', transformOrigin: 'left center' }}
               />
               AI-1
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2ecc71' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2ecc71', fontSize: '1.2rem' }}>
               <input
                 type="checkbox"
                 checked={showAI2}
                 onChange={(e) => setShowAI2(e.target.checked)}
-                style={{ accentColor: '#2ecc71' }}
+                style={{ accentColor: '#2ecc71', transform: 'scale(1.25)', transformOrigin: 'left center' }}
               />
               AI-2
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e74c3c' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e74c3c', fontSize: '1.2rem' }}>
               <input
                 type="checkbox"
                 checked={showHuman}
                 onChange={(e) => setShowHuman(e.target.checked)}
-                style={{ accentColor: '#e74c3c' }}
+                style={{ accentColor: '#e74c3c', transform: 'scale(1.25)', transformOrigin: 'left center' }}
               />
               Human
             </label>
           </div>
+          {showAI1 && !ai1SuggestedMove.hasData && !winner && !isDraw && (
+            <div style={{ textAlign: 'center', marginTop: 8, color: '#888' }}>
+              No AI-1 data for this state and player now. Check back later.
+            </div>
+          )}
         </div>
       </div>
     </div>
