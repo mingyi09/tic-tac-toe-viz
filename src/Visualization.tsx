@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import newGamesRaw from '../new_games.json?raw' // this is our games (human data)
-import ai1Raw from '../q_table_all.json?raw' // this is the AI-1 moves data (Q-learning, full table)
+//import ai1Raw from '../q_table_all.json?raw' // old local file
+import ai1Raw from '../ai_agent_1/q_table.json?raw' // new import from ai_agent_1 folder
 
 type Player = 'X' | 'O'
 type BoardCell = Player | null
