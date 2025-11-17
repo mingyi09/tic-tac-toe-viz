@@ -38,7 +38,7 @@ export default function Visualization() {
   // states that store checkboxes for showing AI1, AI2, and human player strategies
   // default will show everything
   const [showAI1, setShowAI1] = useState<boolean>(true)
-  const [showAI2, setShowAI2] = useState<boolean>(true)
+  const [showAI2, setShowAI2] = useState<boolean>(false)
   const [showHuman, setShowHuman] = useState<boolean>(true)
 
   type GameSummary = {
@@ -251,7 +251,7 @@ export default function Visualization() {
 
       <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'nowrap' }}>
         <div>
-          <h2 style={{ marginBottom: 8 }}>Interactive Board</h2>
+          <h2 style={{ marginBottom: 8 }}>Game Board</h2>
           <div className="board" role="grid" aria-label="Interactive board">
             {board.map((cell, idx) => (
               <button
@@ -269,7 +269,7 @@ export default function Visualization() {
         </div>
 
         <div>
-          <h2 style={{ marginBottom: 8 }}>Game Visualization</h2>
+          <h2 style={{ marginBottom: 8 }}>Recommendation Visualization</h2>
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
             <div className="board" role="grid" aria-label="Synced board">
               {board.map((cell, idx) => {
