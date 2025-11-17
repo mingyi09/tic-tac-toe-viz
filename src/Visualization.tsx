@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import './App.css'
 import newGamesRaw from '../new_games.json?raw' // this is our games (human data)
-import ai1Raw from '../q_table.json?raw' // this is the AI-1 moves data (Q-learning)
+import ai1Raw from '../q_table_all.json?raw' // this is the AI-1 moves data (Q-learning, full table)
 
 type Player = 'X' | 'O'
 type BoardCell = Player | null
@@ -35,8 +35,9 @@ export default function Visualization() {
   const winner = useMemo(() => calculateWinner(board), [board])
   const isDraw = useMemo(() => board.every((c) => c !== null) && !winner, [board, winner])
   // states that store checkboxes for showing AI1, AI2, and human player strategies
-  const [showAI1, setShowAI1] = useState<boolean>(false)
-  const [showAI2, setShowAI2] = useState<boolean>(false)
+  // default will show everything
+  const [showAI1, setShowAI1] = useState<boolean>(true)
+  const [showAI2, setShowAI2] = useState<boolean>(true)
   const [showHuman, setShowHuman] = useState<boolean>(true)
 
   type GameSummary = {
@@ -136,6 +137,72 @@ export default function Visualization() {
     }
     return { move: candidate, hasData: true }
   }, [ai1ByStateAndPlayer, board, nextPlayer, winner, isDraw, showAI1])
+
+  // Entry for current state to drive heatmap (if present)
+  const ai1EntryForState = useMemo(() => {
+    const key = boardToKey(board)
+    const playerNum = nextPlayer === 'X' ? 1 : -1
+    return ai1ByStateAndPlayer.get(`${key}|${playerNum}`) || null
+  }, [ai1ByStateAndPlayer, board, nextPlayer])
+
+  const [ai1HeatmapOpen, setAi1HeatmapOpen] = useState<boolean>(false)
+
+  function probsToMatrix3x3(arr: number[] | undefined) {
+    const a = Array.isArray(arr) && arr.length === 9 ? arr : Array(9).fill(0)
+    return [a.slice(0, 3), a.slice(3, 6), a.slice(6, 9)]
+  }
+
+  useEffect(() => {
+    if (!ai1HeatmapOpen) return
+    const entry = ai1EntryForState
+    const z = probsToMatrix3x3(entry?.probs)
+    // Build customdata carrying canonical row/col labels (row 0 at top, col 0 at left)
+    const customdata = [
+      [ [0,0], [0,1], [0,2] ],
+      [ [1,0], [1,1], [1,2] ],
+      [ [2,0], [2,1], [2,2] ],
+    ]
+    const probs = Array.isArray(entry?.probs) ? (entry!.probs as number[]) : []
+    const maxVal = Math.max(0, ...(probs.length === 9 ? probs : [0]))
+    const el = document.getElementById('ai1-heatmap')
+    const P = (window as unknown as { Plotly?: { react: (el: HTMLElement, data: unknown, layout?: unknown, config?: unknown) => void } }).Plotly
+    if (el && P) {
+      // Custom colorscale: edit the heatmap colors here
+      const colorscale: Array<[number, string]> = [
+        [0.0, '#bdbdbd'],   // grey for zero/lowest
+        [0.00001, '#edf5ff'],
+        [0.2, '#d0e2ff'],
+        [0.5, '#a6c8ff'],
+        [0.8, '#78a9ff'],
+        [1.0, '#0043ce']    // darkest blue for highest
+      ]
+      // using plotly to render heatmap: https://plotly.com/javascript/heatmaps/
+      const data = [{
+        type: 'heatmap',
+        z,
+        x: [0, 1, 2],
+        y: [0, 1, 2],
+        customdata,
+        colorscale,
+        reversescale: false,
+        showscale: true,
+        colorbar: { title: { text: 'Probability' } },
+        zmin: 0,
+        zmax: maxVal > 0 ? maxVal : 1,
+        // Use canonical row/col from customdata so top row is row 0 regardless of axis direction
+        hovertemplate: 'row %{customdata[0]}, col %{customdata[1]}<br>p=%{z:.2f}<extra></extra>',
+      }]
+      const layout = {
+        width: 400,
+        height: 300, 
+        margin: { l: 20, r: 20, t: 20, b: 20 },
+        // Reverse y so the first row in z is rendered at the top (row 0)
+        yaxis: { autorange: 'reversed' as const, visible: false },
+        xaxis: { visible: false },
+      }
+      P.react(el, data as unknown, layout as unknown, { displayModeBar: false } as unknown)
+    }
+  }, [ai1HeatmapOpen, ai1EntryForState])
   const suggestedMove = useMemo(() => {
     if (winner || isDraw) return null
     const key = boardToKey(board)
@@ -181,7 +248,7 @@ export default function Visualization() {
         </div>
       </div>
 
-      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start', flexWrap: 'nowrap' }}>
         <div>
           <h2 style={{ marginBottom: 8 }}>Interactive Board</h2>
           <div className="board" role="grid" aria-label="Interactive board">
@@ -202,40 +269,52 @@ export default function Visualization() {
 
         <div>
           <h2 style={{ marginBottom: 8 }}>Game Visualization</h2>
-          <div className="board" role="grid" aria-label="Synced board">
-            {board.map((cell, idx) => {
-              const isHumanSuggestion = suggestedMove === idx && !cell && !winner && !isDraw && showHuman
-              const isAI1Suggestion = ai1SuggestedMove.move === idx && !cell && !winner && !isDraw && showAI1
-              const display = cell || (isHumanSuggestion || isAI1Suggestion ? nextPlayer : null)
-              const style =
-                isHumanSuggestion && isAI1Suggestion
-                  ? { borderStyle: 'dashed', borderColor: '#e74c3c', boxShadow: 'inset 0 0 0 2px #3498db' }
-                  : isHumanSuggestion
-                  ? { borderStyle: 'dashed', borderColor: '#e74c3c' }
-                  : isAI1Suggestion
-                  ? { borderStyle: 'dashed', borderColor: '#3498db' }
-                  : undefined
-              return (
-                <button
-                  key={`R-${idx}`}
-                  className="square"
-                  role="gridcell"
-                  aria-label={`right-cell-${idx}`}
-                  disabled
-                  style={style}
-                >
-                  {display && (
-                    isHumanSuggestion ? (
-                      <span style={{ opacity: 0.6, color: '#e74c3c' }}>{display}</span>
-                    ) : isAI1Suggestion ? (
-                      <span style={{ opacity: 0.6, color: '#3498db' }}>{display}</span>
-                    ) : (
-                      <span>{display}</span>
-                    )
-                  )}
-                </button>
-              )
-            })}
+          <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
+            <div className="board" role="grid" aria-label="Synced board">
+              {board.map((cell, idx) => {
+                const isHumanSuggestion = suggestedMove === idx && !cell && !winner && !isDraw && showHuman
+                const isAI1Suggestion = ai1SuggestedMove.move === idx && !cell && !winner && !isDraw && showAI1
+                const display = cell || (isHumanSuggestion || isAI1Suggestion ? nextPlayer : null)
+                const style =
+                  isHumanSuggestion && isAI1Suggestion
+                    ? { borderStyle: 'dashed', borderColor: '#e74c3c', boxShadow: 'inset 0 0 0 2px #3498db' }
+                    : isHumanSuggestion
+                    ? { borderStyle: 'dashed', borderColor: '#e74c3c' }
+                    : isAI1Suggestion
+                    ? { borderStyle: 'dashed', borderColor: '#3498db' }
+                    : undefined
+                return (
+                  <button
+                    key={`R-${idx}`}
+                    className="square"
+                    role="gridcell"
+                    aria-label={`right-cell-${idx}`}
+                    disabled={!isAI1Suggestion}
+                    onClick={isAI1Suggestion ? () => setAi1HeatmapOpen(true) : undefined}
+                    style={style}
+                  >
+                    {display && (
+                      isHumanSuggestion ? (
+                        <span style={{ opacity: 0.6, color: '#e74c3c' }}>{display}</span>
+                      ) : isAI1Suggestion ? (
+                        <span style={{ opacity: 0.6, color: '#3498db' }}>{display}</span>
+                      ) : (
+                        <span>{display}</span>
+                      )
+                    )}
+                  </button>
+                )
+              })}
+            </div>
+            {showAI1 && ai1HeatmapOpen && ai1EntryForState && (
+              <div className="setup" style={{ marginTop: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>AI-1 Probability Heatmap</h3>
+                  <button onClick={() => setAi1HeatmapOpen(false)}>Close</button>
+                </div>
+                <div id="ai1-heatmap" aria-label="AI-1 heatmap" />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3498db', fontSize: '1.2rem' }}>
@@ -265,6 +344,9 @@ export default function Visualization() {
               />
               Human
             </label>
+          </div>
+          <div style={{ textAlign: 'center', marginTop: 6, color: '#777', fontSize: '0.9rem' }}>
+            Click the AI move to view probability heatmap
           </div>
           {showAI1 && !ai1SuggestedMove.hasData && !winner && !isDraw && (
             <div style={{ textAlign: 'center', marginTop: 8, color: '#888' }}>
