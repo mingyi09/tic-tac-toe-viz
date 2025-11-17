@@ -9,6 +9,11 @@ URL: https://tic-tac-toe-d1b97.web.app/.
 - `npm run dev`: start dev server
 - `npm run build`: build for production
 - `npm run preview`: preview the production build
+- Include your own firebase API key in a .env file: \
+VITE_FIREBASE_API_KEY="" \
+VITE_FIREBASE_AUTH_DOMAIN="" \
+VITE_FIREBASE_PROJECT_ID="" \
+VITE_FIREBASE_APP_ID=""
 
 ### How it works
 
