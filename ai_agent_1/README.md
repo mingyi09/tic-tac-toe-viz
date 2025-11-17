@@ -38,7 +38,7 @@ Each state is represented as a 3×3 tuple of the board:
 
 - **Win**: +1
 - **Draw**: +0.5
-- **Loss**: -1 or -0.5
+- **Loss**: -1
 
 
 ### Key Components
