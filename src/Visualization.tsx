@@ -232,6 +232,9 @@ export default function Visualization() {
         customdata,
         colorscale,
         reversescale: false,
+        // xgap / ygap create visible grid lines between cells
+        xgap: 2,
+        ygap: 2,
         showscale: true,
         colorbar: { title: { text: 'Probability' } },
         zmin: 0,
@@ -274,13 +277,14 @@ export default function Visualization() {
     const el = document.getElementById('ai2-heatmap')
     const P = (window as unknown as { Plotly?: { react: (el: HTMLElement, data: unknown, layout?: unknown, config?: unknown) => void } }).Plotly
     if (el && P) {
+      // Light green for low probability, darkest green for highest
       const colorscale: Array<[number, string]> = [
-        [0.0, '#bdbdbd'],
+        [0.0, '#bdbdbd'],   // grey for zero
         [0.00001, '#e8f5e9'],
-        [0.2, '#c8e6c9'],
+        [0.25, '#c8e6c9'],
         [0.5, '#81c784'],
-        [0.8, '#43a047'],
-        [1.0, '#1b5e20'],
+        [0.75, '#43a047'],
+        [1.0, '#1b5e20'],   // darkest green for max
       ]
       const data = [{
         type: 'heatmap',
@@ -290,6 +294,8 @@ export default function Visualization() {
         customdata,
         colorscale,
         reversescale: false,
+        xgap: 2,
+        ygap: 2,
         showscale: true,
         colorbar: { title: { text: 'Probability' } },
         zmin: 0,
@@ -395,6 +401,11 @@ export default function Visualization() {
                     const existing = style && style.boxShadow ? `${style.boxShadow}, ` : ''
                     style = { ...(style || {}), boxShadow: `${existing}inset 0 0 0 2px #2ecc71` }
                   }
+                }
+                // Cursor: pointer only on clickable AI suggestion cells
+                style = {
+                  ...(style || {}),
+                  cursor: (isAI1Suggestion || isAI2Suggestion) ? 'pointer' : 'default',
                 }
                 return (
                   <button

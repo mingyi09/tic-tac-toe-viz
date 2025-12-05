@@ -25,7 +25,7 @@ function Router() {
     <>
       <div style={{ padding: '10px', borderBottom: '1px solid #eee', marginBottom: 12 }}>
         <button onClick={() => navigate('/')} style={{ marginRight: 8 }}>
-          Data Collection
+          Play A Game!
         </button>
         <button onClick={() => navigate('/visualize')}>
           Visualization
