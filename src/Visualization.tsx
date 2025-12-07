@@ -3,6 +3,7 @@ import './App.css'
 import newGamesRaw from '../new_games.json?raw' // this is our games (human data)
 //import ai1Raw from '../q_table_all.json?raw' // old local file
 import ai1Raw from '../ai_agent_1/q_table.json?raw' // new import from ai_agent_1 folder
+import ai2Raw from '../ai_agent_2/value_iteration_table.json?raw' // AI-2 value-iteration table
 
 type Player = 'X' | 'O'
 type BoardCell = Player | null
@@ -29,8 +30,8 @@ function calculateWinner(board: BoardCell[]): Player | null {
   return null
 }
 
-// the main component that renders the visualization
-export default function Visualization() {
+  // the main component that renders the visualization
+  export default function Visualization() {
   const [board, setBoard] = useState<BoardCell[]>(Array(9).fill(null))
   const [nextPlayer, setNextPlayer] = useState<Player>('X')
   const winner = useMemo(() => calculateWinner(board), [board])
@@ -38,8 +39,9 @@ export default function Visualization() {
   // states that store checkboxes for showing AI1, AI2, and human player strategies
   // default will show everything
   const [showAI1, setShowAI1] = useState<boolean>(true)
-  const [showAI2, setShowAI2] = useState<boolean>(false)
+  const [showAI2, setShowAI2] = useState<boolean>(true)
   const [showHuman, setShowHuman] = useState<boolean>(true)
+  const [showRecHelp, setShowRecHelp] = useState<boolean>(false)
 
   type GameSummary = {
     id: string
@@ -106,6 +108,23 @@ export default function Visualization() {
     return map
   }, [])
 
+  // Parse AI-2 table once and build lookup
+  const ai2ByStateAndPlayer = useMemo(() => {
+    const map = new Map<string, QState>()
+    try {
+      const parsed = JSON.parse(ai2Raw) as { states: Record<string, QState> }
+      const entries = parsed?.states ? Object.entries(parsed.states) : []
+      for (const [s, v] of entries) {
+        if (!v || !Array.isArray(v.probs)) continue
+        const p = (v.player === 1 ? 1 : -1) as 1 | -1
+        map.set(`${s}|${p}`, { player: p, probs: v.probs, best: v.best })
+      }
+    } catch {
+      console.log('Error parsing AI-2 table')
+    }
+    return map
+  }, [])
+
   const ai1SuggestedMove = useMemo(() => {
     if (!showAI1) return { move: null as number | null, hasData: false }
     if (winner || isDraw) return { move: null as number | null, hasData: false }
@@ -138,6 +157,34 @@ export default function Visualization() {
     }
     return { move: candidate, hasData: true }
   }, [ai1ByStateAndPlayer, board, nextPlayer, winner, isDraw, showAI1])
+
+  const ai2SuggestedMove = useMemo(() => {
+    if (!showAI2) return { move: null as number | null, hasData: false }
+    if (winner || isDraw) return { move: null as number | null, hasData: false }
+    const key = boardToKey(board)
+    const playerNum = nextPlayer === 'X' ? 1 : -1
+    const entry = ai2ByStateAndPlayer.get(`${key}|${playerNum}`)
+    if (!entry) return { move: null as number | null, hasData: false }
+    const legalIndices: number[] = []
+    for (let i = 0; i < 9; i++) if (!board[i]) legalIndices.push(i)
+    if (legalIndices.length === 0) return { move: null as number | null, hasData: true }
+    let candidate: number | null = null
+    if (typeof entry.best === 'number' && legalIndices.includes(entry.best)) {
+      candidate = entry.best
+    } else {
+      let bestIdx: number | null = null
+      let bestVal = -Infinity
+      for (const i of legalIndices) {
+        const v = entry.probs[i] ?? -Infinity
+        if (v > bestVal) {
+          bestVal = v
+          bestIdx = i
+        }
+      }
+      candidate = bestIdx
+    }
+    return { move: candidate, hasData: true }
+  }, [ai2ByStateAndPlayer, board, nextPlayer, winner, isDraw, showAI2])
 
   // Entry for current state to drive heatmap (if present)
   const ai1EntryForState = useMemo(() => {
@@ -186,6 +233,9 @@ export default function Visualization() {
         customdata,
         colorscale,
         reversescale: false,
+        // xgap / ygap create visible grid lines between cells
+        xgap: 2,
+        ygap: 2,
         showscale: true,
         colorbar: { title: { text: 'Probability' } },
         zmin: 0,
@@ -204,6 +254,66 @@ export default function Visualization() {
       P.react(el, data as unknown, layout as unknown, { displayModeBar: false } as unknown)
     }
   }, [ai1HeatmapOpen, ai1EntryForState])
+
+  // AI-2 heatmap state and effect
+  const ai2EntryForState = useMemo(() => {
+    const key = boardToKey(board)
+    const playerNum = nextPlayer === 'X' ? 1 : -1
+    return ai2ByStateAndPlayer.get(`${key}|${playerNum}`) || null
+  }, [ai2ByStateAndPlayer, board, nextPlayer])
+
+  const [ai2HeatmapOpen, setAi2HeatmapOpen] = useState<boolean>(false)
+
+  useEffect(() => {
+    if (!ai2HeatmapOpen) return
+    const entry = ai2EntryForState
+    const z = probsToMatrix3x3(entry?.probs)
+    const customdata = [
+      [ [0,0], [0,1], [0,2] ],
+      [ [1,0], [1,1], [1,2] ],
+      [ [2,0], [2,1], [2,2] ],
+    ]
+    const probs = Array.isArray(entry?.probs) ? (entry!.probs as number[]) : []
+    const maxVal = Math.max(0, ...(probs.length === 9 ? probs : [0]))
+    const el = document.getElementById('ai2-heatmap')
+    const P = (window as unknown as { Plotly?: { react: (el: HTMLElement, data: unknown, layout?: unknown, config?: unknown) => void } }).Plotly
+    if (el && P) {
+      // Light purple for low probability, very dark purple for highest
+      const colorscale: Array<[number, string]> = [
+        [0.0, '#bdbdbd'],   // grey for zero
+        [0.00001, '#f3e6f1'],
+        [0.25, '#e1c7e3'],
+        [0.5, '#ce9fd3'],
+        [0.75, '#b97bc3'],
+        [1.0, '#7B3F72'],   // darker purple for max
+      ]
+      const data = [{
+        type: 'heatmap',
+        z,
+        x: [0, 1, 2],
+        y: [0, 1, 2],
+        customdata,
+        colorscale,
+        reversescale: false,
+        xgap: 2,
+        ygap: 2,
+        showscale: true,
+        colorbar: { title: { text: 'Probability' } },
+        zmin: 0,
+        zmax: maxVal > 0 ? maxVal : 1,
+        hovertemplate: 'row %{customdata[0]}, col %{customdata[1]}<br>p=%{z:.2f}<extra></extra>',
+      }]
+      const layout = {
+        width: 400,
+        height: 300,
+        margin: { l: 20, r: 20, t: 20, b: 20 },
+        yaxis: { autorange: 'reversed' as const, visible: false },
+        xaxis: { visible: false },
+      }
+      P.react(el, data as unknown, layout as unknown, { displayModeBar: false } as unknown)
+    }
+  }, [ai2HeatmapOpen, ai2EntryForState])
+  
   const suggestedMove = useMemo(() => {
     if (winner || isDraw) return null
     const key = boardToKey(board)
@@ -269,38 +379,172 @@ export default function Visualization() {
         </div>
 
         <div>
-          <h2 style={{ marginBottom: 8 }}>Recommendation Visualization</h2>
+          <h2 style={{ marginBottom: 8, display: 'flex', alignItems: 'center', gap: 8, position: 'relative' }}>
+            Recommendation Visualization
+            <span
+              style={{
+                display: 'inline-flex',
+                width: 18,
+                height: 18,
+                borderRadius: '50%',
+                border: '1px solid #888',
+                fontSize: '0.8rem',
+                alignItems: 'center',
+                justifyContent: 'center',
+                cursor: 'pointer',
+                color: '#555',
+              }}
+              onClick={() => setShowRecHelp((v) => !v)}
+              onMouseEnter={() => setShowRecHelp(true)}
+              onMouseLeave={() => setShowRecHelp(false)}
+            >
+              ?
+            </span>
+            {showRecHelp && (
+              <div
+                style={{
+                  position: 'absolute',
+                  top: '115%',
+                  left: 0,
+                  padding: '6px 8px',
+                  backgroundColor: '#111',
+                  color: '#f5f5f5',
+                  fontSize: '0.8rem',
+                  borderRadius: 6,
+                  boxShadow: '0 2px 6px rgba(0,0,0,0.25)',
+                  maxWidth: 260,
+                  zIndex: 10,
+                }}
+              >
+                Click AI-1 or AI-2 suggested cells in the recommendation board to view their probability heatmaps.
+              </div>
+            )}
+          </h2>
           <div style={{ display: 'flex', gap: 24, alignItems: 'flex-start' }}>
             <div className="board" role="grid" aria-label="Synced board">
               {board.map((cell, idx) => {
                 const isHumanSuggestion = suggestedMove === idx && !cell && !winner && !isDraw && showHuman
                 const isAI1Suggestion = ai1SuggestedMove.move === idx && !cell && !winner && !isDraw && showAI1
-                const display = cell || (isHumanSuggestion || isAI1Suggestion ? nextPlayer : null)
-                const style =
-                  isHumanSuggestion && isAI1Suggestion
-                    ? { borderStyle: 'dashed', borderColor: '#e74c3c', boxShadow: 'inset 0 0 0 2px #3498db' }
-                    : isHumanSuggestion
-                    ? { borderStyle: 'dashed', borderColor: '#e74c3c' }
-                    : isAI1Suggestion
-                    ? { borderStyle: 'dashed', borderColor: '#3498db' }
-                    : undefined
+                const isAI2Suggestion = ai2SuggestedMove.move === idx && !cell && !winner && !isDraw && showAI2
+                const anySuggestion = isHumanSuggestion || isAI1Suggestion || isAI2Suggestion
+                const suggestionCount =
+                  (isHumanSuggestion ? 1 : 0) +
+                  (isAI1Suggestion ? 1 : 0) +
+                  (isAI2Suggestion ? 1 : 0)
+
+                const display = cell || (anySuggestion ? nextPlayer : null)
+
+                // Border styling: grey dashed when multiple strategies collide, otherwise colored dashed
+                let style: React.CSSProperties | undefined
+                if (anySuggestion) {
+                  style = { borderStyle: 'dashed', borderWidth: 2, outline: 'none' }
+                  if (suggestionCount > 1) {
+                    style.borderColor = '#999999'
+                  } else if (isHumanSuggestion) {
+                    style.borderColor = '#F28E2B'
+                  } else if (isAI1Suggestion) {
+                    style.borderColor = '#3498db'
+                  } else if (isAI2Suggestion) {
+                    style.borderColor = '#B07AA1'
+                  }
+                }
+
+                // Cursor: pointer only on clickable AI suggestion cells
+                style = {
+                  ...(style || {}),
+                  cursor: (isAI1Suggestion || isAI2Suggestion) ? 'pointer' : 'default',
+                }
+
                 return (
                   <button
                     key={`R-${idx}`}
                     className="square"
                     role="gridcell"
                     aria-label={`right-cell-${idx}`}
-                    disabled={!isAI1Suggestion}
-                    onClick={isAI1Suggestion ? () => setAi1HeatmapOpen(true) : undefined}
+                    disabled={!(isAI1Suggestion || isAI2Suggestion)}
+                    onClick={
+                      (isAI1Suggestion || isAI2Suggestion)
+                        ? () => {
+                            if (isAI1Suggestion && !isAI2Suggestion) {
+                              setAi1HeatmapOpen(true)
+                              setAi2HeatmapOpen(false)
+                            } else if (isAI2Suggestion && !isAI1Suggestion) {
+                              setAi2HeatmapOpen(true)
+                              setAi1HeatmapOpen(false)
+                            } else {
+                              // if both suggest same cell, show both
+                              setAi1HeatmapOpen(true)
+                              setAi2HeatmapOpen(true)
+                            }
+                          }
+                        : undefined
+                    }
                     style={style}
                   >
-                    {display && (
-                      isHumanSuggestion ? (
-                        <span style={{ opacity: 0.6, color: '#e74c3c' }}>{display}</span>
-                      ) : isAI1Suggestion ? (
-                        <span style={{ opacity: 0.6, color: '#3498db' }}>{display}</span>
+                    {cell && <span>{cell}</span>}
+                    {!cell && anySuggestion && display && (
+                      suggestionCount === 1 ? (
+                        // Single strategy suggestion: one colored letter
+                        isHumanSuggestion ? (
+                          <span style={{ color: '#F28E2B', fontSize: '2rem' }}>{display}</span>
+                        ) : isAI1Suggestion ? (
+                          <span style={{ color: '#3498db' }}>{display}</span>
+                        ) : (
+                          <span style={{ color: '#B07AA1' }}>{display}</span>
+                        )
                       ) : (
-                        <span>{display}</span>
+                        // Multiple strategies: show at most one circle per strategy (no outer ring)
+                        <div
+                          style={{
+                            position: 'relative',
+                            width: '100%',
+                            height: '100%',
+                            fontSize: '1.4rem',
+                          }}
+                        >
+                          {isHumanSuggestion && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: '45%',
+                                left: '50%',
+                                transform: 'translate(-50%, -50%)',
+                                color: '#F28E2B',
+                                fontSize: '2rem',
+                              }}
+                            >
+                              {display}
+                            </span>
+                          )}
+                          {isAI1Suggestion && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: '72%',
+                                left: '5%',
+                                transform: 'translate(-50%, -50%)',
+                                color: '#3498db',
+                                fontSize: '2rem',
+                              }}
+                            >
+                              {display}
+                            </span>
+                          )}
+                          {isAI2Suggestion && (
+                            <span
+                              style={{
+                                position: 'absolute',
+                                top: '72%',
+                                left: '90%',
+                                transform: 'translate(-50%, -50%)',
+                                color: '#B07AA1',
+                                fontSize: '2rem',
+                              }}
+                            >
+                              {display}
+                            </span>
+                          )}
+                        </div>
                       )
                     )}
                   </button>
@@ -316,6 +560,15 @@ export default function Visualization() {
                 <div id="ai1-heatmap" aria-label="AI-1 heatmap" />
               </div>
             )}
+            {showAI2 && ai2HeatmapOpen && ai2EntryForState && (
+              <div className="setup" style={{ marginTop: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <h3 style={{ margin: 0 }}>AI-2 Probability Heatmap</h3>
+                  <button onClick={() => setAi2HeatmapOpen(false)}>Close</button>
+                </div>
+                <div id="ai2-heatmap" aria-label="AI-2 heatmap" />
+              </div>
+            )}
           </div>
           <div style={{ display: 'flex', gap: 16, justifyContent: 'center' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#3498db', fontSize: '1.2rem' }}>
@@ -327,34 +580,44 @@ export default function Visualization() {
               />
               AI-1
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#2ecc71', fontSize: '1.2rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#B07AA1', fontSize: '1.2rem' }}>
               <input
                 type="checkbox"
                 checked={showAI2}
                 onChange={(e) => setShowAI2(e.target.checked)}
-                style={{ accentColor: '#2ecc71', transform: 'scale(1.25)', transformOrigin: 'left center' }}
+                style={{ accentColor: '#B07AA1', transform: 'scale(1.25)', transformOrigin: 'left center' }}
               />
               AI-2
             </label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#e74c3c', fontSize: '1.2rem' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#F28E2B', fontSize: '1.2rem' }}>
               <input
                 type="checkbox"
                 checked={showHuman}
                 onChange={(e) => setShowHuman(e.target.checked)}
-                style={{ accentColor: '#e74c3c', transform: 'scale(1.25)', transformOrigin: 'left center' }}
+                style={{ accentColor: '#F28E2B', transform: 'scale(1.25)', transformOrigin: 'left center' }}
               />
               Human
             </label>
-          </div>
-          <div style={{ textAlign: 'center', marginTop: 6, color: '#777', fontSize: '0.9rem' }}>
-            Click the AI move to view probability heatmap
           </div>
           {showAI1 && !ai1SuggestedMove.hasData && !winner && !isDraw && (
             <div style={{ textAlign: 'center', marginTop: 8, color: '#888' }}>
               No AI-1 data for this state and player now. Check back later.
             </div>
           )}
+          {showAI2 && !ai2SuggestedMove.hasData && !winner && !isDraw && (
+            <div style={{ textAlign: 'center', marginTop: 8, color: '#888' }}>
+              No AI-2 data for this state and player now. Check back later.
+            </div>
+          )}
+          {showHuman && !winner && !isDraw && suggestedMove === null && board.some((c) => c === null) && (
+            <div style={{ textAlign: 'center', marginTop: 8, color: '#777', fontSize: '0.9rem' }}>
+              *insufficient human data at this game configuration
+            </div>
+          )}
         </div>
+      </div>
+      <div style={{ textAlign: 'center', marginTop: 8, fontSize: '0.8rem', color: '#777' }}>
+        *best view at desktop
       </div>
     </div>
   )
