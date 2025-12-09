@@ -26,12 +26,12 @@ function Router() {
   return (
     <>
       <div style={{ padding: '10px', borderBottom: '1px solid #eee', marginBottom: 12, display: 'flex', gap: 8 }}>
-        <button onClick={() => navigate('/project')}>
+        {/* <button onClick={() => navigate('/project')}>
           Project Page
-        </button>
+        </button> */}
         <button onClick={() => navigate('/')}>Data Collection</button>
         <button onClick={() => navigate('/visualize')}>Visualization</button>
-        <button onClick={() => navigate('/ai-models')}>About the AI Models</button>
+        <button onClick={() => navigate('/ai-models')}>AI Models</button>
       </div>
       {path === '/project' && <ProjectPage />}
       {path === '/visualize' && <Visualization />}

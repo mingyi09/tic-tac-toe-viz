@@ -14,14 +14,24 @@ export default function AiModels() {
         <div className="field">
           <h3>AI-1: Q-Learning Agent</h3>
           <p>
-            AI-1 is a Q-learning agent ...
+          We trained an agent using the popular reinforcement learning
+algorithm Q-learning. Q-learning is a model-free method, which makes it
+especially useful for scaling to games more complex than Tic-Tac-Toe. For our
+experiments, we set the learning rate to 0.1 and trained the agent for 10,000
+episodes to ensure it had sufficient experience to learn effective strategies.
           </p>
         </div>
 
         <div className="field">
           <h3>AI-2: Value-Iteration Agent</h3>
           <p>
-            AI-2 is a dynamic-programming based value-iteration agent...
+          We also trained an agent using a dynamic-programming–based
+reinforcement learning method called Value Iteration. This approach is
+simple and interpretable, making it easy to understand how the agent evaluates
+states and updates its decisions. However, because Value Iteration requires
+sweeping over the entire state space, it does not scale well to larger or more
+complex games. In our setup, we used a convergence threshold of 1e-6 and
+allowed up to 1,000 iterations to ensure the algorithm reached a stable solution
           </p>
         </div>
 
